@@ -1,3 +1,5 @@
+all: prepare_data install_deps
+
 prepare_data:
 	mkdir -p data/scans
 	curl http://www.riteh.uniri.hr/~istajduh/projects/kneeMRI/data/metadata.csv --output data/metadata.csv
@@ -10,3 +12,5 @@ prepare_data:
 		echo Extracted... Cleaning; \
 		rm /tmp/dataset.7z; \
     done
+install_deps:
+	pip install -r requirements.txt
