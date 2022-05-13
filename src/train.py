@@ -128,11 +128,11 @@ def run(args):
 
     device = get_device()
 
-    train_dl, valid_dl, test_dl = prepare_data()
+    train_dl, valid_dl, test_dl = prepare_data(sampling_frac=args.data_sampling_frac)
 
-    model = AclNet(architecture=args.architecture, device=device)
+    model = AclNet(architecture=args.architecture)
 
-    optimizer = optim.SGD(model.parameters(), lr=args.lr,
+    optimizer = optim.SGD(model.parameters(), lr=args.learning_rate,
                           weight_decay=args.weight_decay)
 
     criterion = nn.BCEWithLogitsLoss()
@@ -167,7 +167,9 @@ def parse_arguments():
     parser.add_argument('--weight_decay', type=float, default=1e-5)
     parser.add_argument('--architecture', type=str, default='resnet10',
                         choices=['resnet10', 'resnet34', 'resnet50'])
+    parser.add_argument('--data_sampling_frac', type=float, default=1.0)
     args = parser.parse_args()
+    print("Using params:", args)
     return args
 
 

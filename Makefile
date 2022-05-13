@@ -11,6 +11,6 @@ prepare_data:
 		7z e /tmp/dataset.7z -odata/scans -aos; \
 		echo Extracted... Cleaning; \
 		rm /tmp/dataset.7z; \
-    done
+	done
 install_deps:
 	pip install -r requirements.txt

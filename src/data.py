@@ -39,8 +39,8 @@ class kneeMRIDataset(data.Dataset):
         return [roi, self.y.iloc[idx]]
 
 
-def prepare_data(sample_frac=1.0):
-    df = load_df(sample_frac)
+def prepare_data(sampling_frac=1.0):
+    df = load_df(sampling_frac)
 
     subsets = split_data(df)
 
@@ -51,7 +51,7 @@ def prepare_data(sample_frac=1.0):
     return dataloaders
 
 
-def load_df(sample_frac):
+def load_df(sampling_frac):
     df = pd.read_csv("data/metadata.csv")
 
     X = df.drop(columns="aclDiagnosis")
@@ -63,8 +63,8 @@ def load_df(sample_frac):
     df = X
     df["aclDiagnosis"] = y
 
-    if sample_frac < 1.0:
-        df = df.sample(frac=sample_frac, random_state=1)
+    if sampling_frac < 1.0:
+        df = df.sample(frac=sampling_frac, random_state=1)
 
     return df
 
