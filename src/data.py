@@ -1,10 +1,10 @@
 import numpy as np
 import pandas as pd
 import torch.utils.data as data
-from imblearn.over_sampling import RandomOverSampler
 from monai.transforms import (Compose, RandAffine, RandHistogramShift, Resize,
                               ScaleIntensity, ToTensor)
 from sklearn.model_selection import train_test_split
+from torch.utils.data.sampler import WeightedRandomSampler
 
 from src.utils import load_img
 
@@ -54,14 +54,7 @@ def prepare_data(sampling_frac=1.0, num_workers=None):
 def load_df(sampling_frac):
     df = pd.read_csv("data/metadata.csv")
 
-    X = df.drop(columns="aclDiagnosis")
-    y = (df["aclDiagnosis"] > 0).astype('float32')
-
-    ros = RandomOverSampler(random_state=0)
-    X, y = ros.fit_resample(X, y)
-
-    df = X
-    df["aclDiagnosis"] = y
+    df["aclDiagnosis"] = (df["aclDiagnosis"] > 0).astype('float32')
 
     if sampling_frac < 1.0:
         df = df.sample(frac=sampling_frac, random_state=1)
@@ -114,10 +107,23 @@ def prepare_datasets(subsets):
 def prepare_dataloaders(datasets, num_workers):
     train_dataset, valid_dataset, test_dataset = datasets
 
+    train_sampler = prepare_weighted_sampler(train_dataset)
+
     train_dl = data.DataLoader(
-        train_dataset, batch_size=64, shuffle=True, pin_memory=True, drop_last=True, num_workers=num_workers)
+        train_dataset, batch_size=64, pin_memory=True, drop_last=True, num_workers=num_workers, sampler=train_sampler)
     valid_dl = data.DataLoader(
         valid_dataset, batch_size=1024, shuffle=False, pin_memory=True, num_workers=num_workers)
     test_dl = data.DataLoader(
         test_dataset, batch_size=1024, shuffle=False, pin_memory=True, num_workers=num_workers)
     return train_dl, valid_dl, test_dl
+
+def prepare_weighted_sampler(dataset):
+    y = dataset.y.astype('uint8')
+
+    counts = np.bincount(y)
+
+    labels_weights = 1. / counts
+
+    weights = labels_weights[y]
+
+    return WeightedRandomSampler(weights, len(weights), replacement=True)
