@@ -5,6 +5,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import torch.optim.lr_scheduler as lr_scheduler
 from torch.utils.tensorboard import SummaryWriter
 
 from src.data import prepare_data
@@ -101,8 +102,10 @@ def evaluate(model, dataloader, criterion, device):
     return epoch_loss, epoch_score
 
 
-def evaluate_on_valid(model, dataloader, criterion, epoch, num_epochs, writer, device):
+def evaluate_on_valid(model, dataloader, criterion, scheduler, epoch, num_epochs, writer, device):
     epoch_loss, epoch_score = evaluate(model, dataloader, criterion, device)
+
+    scheduler.step(epoch_loss)
 
     print(
         f"\n\nVAL Epoch: {epoch+1}/{num_epochs}, score: {epoch_score}, loss: {epoch_loss}\n\n")
@@ -142,6 +145,8 @@ def run(args):
 
     criterion = nn.BCEWithLogitsLoss()
 
+    scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, patience=args.lr_patience, factor=.5, verbose=True)
+
     best_score = float(0)
 
     for epoch in range(num_epochs):
@@ -149,7 +154,7 @@ def run(args):
                      criterion, epoch, num_epochs, writer, device)
 
         val_loss, val_score = evaluate_on_valid(
-            model, valid_dl, criterion, epoch, num_epochs, writer, device)
+            model, valid_dl, criterion, scheduler, epoch, num_epochs, writer, device)
 
         if val_score > best_score:
             print(f"Improvement! Previous: {best_score}, new: {val_score}")
@@ -171,10 +176,11 @@ def parse_arguments():
     parser.add_argument('--learning_rate', type=float, default=1e-2)
     parser.add_argument('--momentum', type=float, default=0.0)
     parser.add_argument('--weight_decay', type=float, default=1e-5)
+    parser.add_argument('--lr_patience', type=int, default=10)
     parser.add_argument('--architecture', type=str, default='resnet10',
                         choices=['resnet10', 'resnet34', 'resnet50'])
     parser.add_argument('--data_sampling_frac', type=float, default=1.0)
-    parser.add_argument('--dataloader_num_workers', type=int, default=10)
+    parser.add_argument('--dataloader_num_workers', type=int, default=4)
     args = parser.parse_args()
     print("Using params:", args)
     return args
