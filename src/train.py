@@ -135,7 +135,7 @@ def run(args):
 
     device = get_device()
 
-    train_dl, valid_dl, test_dl = prepare_data(
+    train_dl, valid_dl, test_dl = prepare_data(batch_size=args.batch_size,
         sampling_frac=args.data_sampling_frac, num_workers=args.dataloader_num_workers)
 
     model = AclNet(architecture=args.architecture).to(device)
@@ -177,8 +177,9 @@ def parse_arguments():
     parser.add_argument('--momentum', type=float, default=0.0)
     parser.add_argument('--weight_decay', type=float, default=1e-5)
     parser.add_argument('--lr_patience', type=int, default=10)
+    parser.add_argument('--batch_size', type=int, default=64)
     parser.add_argument('--architecture', type=str, default='resnet10',
-                        choices=['resnet10', 'resnet34', 'resnet50'])
+                        choices=['resnet10', 'resnet34', 'resnet50', "efficientnet-b0"])
     parser.add_argument('--data_sampling_frac', type=float, default=1.0)
     parser.add_argument('--dataloader_num_workers', type=int, default=4)
     args = parser.parse_args()

@@ -39,14 +39,14 @@ class kneeMRIDataset(data.Dataset):
         return [roi, self.y.iloc[idx]]
 
 
-def prepare_data(sampling_frac=1.0, num_workers=None):
+def prepare_data(batch_size=64, sampling_frac=1.0, num_workers=None):
     df = load_df(sampling_frac)
 
     subsets = split_data(df)
 
     datasets = prepare_datasets(subsets)
 
-    dataloaders = prepare_dataloaders(datasets, num_workers)
+    dataloaders = prepare_dataloaders(datasets, batch_size, num_workers)
 
     return dataloaders
 
@@ -83,12 +83,12 @@ def prepare_datasets(subsets):
 
     augmentations = Compose([
                             RandHistogramShift(
-                                prob=0.5, num_control_points=80),
+                                prob=0.5, num_control_points=(30, 100)),
                             RandAffine(
                                 prob=0.5,
-                                translate_range=(1, 10, 10),
-                                rotate_range=(0.17, 0.17, 0.17),
-                                scale_range=(0.05, 0.05, 0.05),
+                                translate_range=(1, 20, 20),
+                                rotate_range=(0.25, 0.25, 0.25),
+                                scale_range=(0.10, 0.10, 0.10),
                                 padding_mode='border')
                             ])
 
@@ -104,13 +104,13 @@ def prepare_datasets(subsets):
     return train_dataset, valid_dataset, test_dataset
 
 
-def prepare_dataloaders(datasets, num_workers):
+def prepare_dataloaders(datasets, batch_size, num_workers):
     train_dataset, valid_dataset, test_dataset = datasets
 
     train_sampler = prepare_weighted_sampler(train_dataset)
 
     train_dl = data.DataLoader(
-        train_dataset, batch_size=64, pin_memory=True, drop_last=True, num_workers=num_workers, sampler=train_sampler)
+        train_dataset, batch_size=batch_size, pin_memory=True, drop_last=True, num_workers=num_workers, sampler=train_sampler)
     valid_dl = data.DataLoader(
         valid_dataset, batch_size=1024, shuffle=False, pin_memory=True, num_workers=num_workers)
     test_dl = data.DataLoader(
