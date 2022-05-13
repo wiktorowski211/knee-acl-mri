@@ -115,7 +115,7 @@ def evaluate_on_valid(model, dataloader, criterion, epoch, num_epochs, writer, d
 
 def evaluate_on_test(model, dataloader, criterion, device, checkpoint_path=None):
     if checkpoint_path:
-        model = load_checkpoint(checkpoint_path)
+        model = load_checkpoint(checkpoint_path, model)
 
     epoch_loss, epoch_score = evaluate(model, dataloader, criterion, device)
 
@@ -138,7 +138,7 @@ def run(args):
     model = AclNet(architecture=args.architecture).to(device)
 
     optimizer = optim.SGD(model.parameters(), lr=args.learning_rate,
-                          weight_decay=args.weight_decay)
+                          momentum=args.momentum, weight_decay=args.weight_decay)
 
     criterion = nn.BCEWithLogitsLoss()
 
@@ -169,6 +169,7 @@ def parse_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument('--epochs', type=int, default=50)
     parser.add_argument('--learning_rate', type=float, default=1e-2)
+    parser.add_argument('--momentum', type=float, default=0.0)
     parser.add_argument('--weight_decay', type=float, default=1e-5)
     parser.add_argument('--architecture', type=str, default='resnet10',
                         choices=['resnet10', 'resnet34', 'resnet50'])

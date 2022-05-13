@@ -42,7 +42,6 @@ def save_checkpoint(checkpoint_path, model, optimizer, val_loss, val_score, epoc
     print("Checkpoint saved!")
 
 
-
 def load_checkpoint(checkpoint_path, model):
     checkpoint = torch.load(checkpoint_path)
     model.load_state_dict(checkpoint['model_state_dict'])
