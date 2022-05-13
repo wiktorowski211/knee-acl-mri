@@ -39,14 +39,14 @@ class kneeMRIDataset(data.Dataset):
         return [roi, self.y.iloc[idx]]
 
 
-def prepare_data(sampling_frac=1.0):
+def prepare_data(sampling_frac=1.0, num_workers=None):
     df = load_df(sampling_frac)
 
     subsets = split_data(df)
 
     datasets = prepare_datasets(subsets)
 
-    dataloaders = prepare_dataloaders(datasets)
+    dataloaders = prepare_dataloaders(datasets, num_workers)
 
     return dataloaders
 
@@ -111,13 +111,13 @@ def prepare_datasets(subsets):
     return train_dataset, valid_dataset, test_dataset
 
 
-def prepare_dataloaders(datasets):
+def prepare_dataloaders(datasets, num_workers):
     train_dataset, valid_dataset, test_dataset = datasets
 
     train_dl = data.DataLoader(
-        train_dataset, batch_size=64, shuffle=True, pin_memory=True, drop_last=True)
+        train_dataset, batch_size=64, shuffle=True, pin_memory=True, drop_last=True, num_workers=num_workers)
     valid_dl = data.DataLoader(
-        valid_dataset, batch_size=1024, shuffle=False, pin_memory=True)
+        valid_dataset, batch_size=1024, shuffle=False, pin_memory=True, num_workers=num_workers)
     test_dl = data.DataLoader(
-        test_dataset, batch_size=1024, shuffle=False, pin_memory=True)
+        test_dataset, batch_size=1024, shuffle=False, pin_memory=True, num_workers=num_workers)
     return train_dl, valid_dl, test_dl

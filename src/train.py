@@ -28,16 +28,18 @@ def seed_everything(seed=0):
     torch.backends.cudnn.deterministic = True
 
 
-def train(model, dataloader, optimizer, criterion, epoch, num_epochs, writer):
+def train(model, dataloader, optimizer, criterion, epoch, num_epochs, writer, device):
     model.train()
 
     scores = []
     losses = []
 
     for i, (X, y) in enumerate(dataloader):
-        optimizer.zero_grad()
+        X, y = X.to(device), y.to(device)
 
         y = y.unsqueeze(1)
+
+        optimizer.zero_grad()
 
         y_pred = model(X)
 
@@ -70,7 +72,7 @@ def train(model, dataloader, optimizer, criterion, epoch, num_epochs, writer):
     return epoch_loss, epoch_score
 
 
-def evaluate(model, dataloader, criterion):
+def evaluate(model, dataloader, criterion, device):
     model.eval()
 
     losses = []
@@ -78,6 +80,8 @@ def evaluate(model, dataloader, criterion):
 
     with torch.no_grad():
         for i, (X, y) in enumerate(dataloader):
+            X, y = X.to(device), y.to(device)
+
             y = y.unsqueeze(1)
 
             y_pred = model(X)
@@ -97,8 +101,8 @@ def evaluate(model, dataloader, criterion):
     return epoch_loss, epoch_score
 
 
-def evaluate_on_valid(model, dataloader, criterion, epoch, num_epochs, writer):
-    epoch_loss, epoch_score = evaluate(model, dataloader, criterion)
+def evaluate_on_valid(model, dataloader, criterion, epoch, num_epochs, writer, device):
+    epoch_loss, epoch_score = evaluate(model, dataloader, criterion, device)
 
     print(
         f"\n\nVAL Epoch: {epoch+1}/{num_epochs}, score: {epoch_score}, loss: {epoch_loss}\n\n")
@@ -109,11 +113,11 @@ def evaluate_on_valid(model, dataloader, criterion, epoch, num_epochs, writer):
     return epoch_loss, epoch_score
 
 
-def evaluate_on_test(model, dataloader, criterion, checkpoint_path=None):
+def evaluate_on_test(model, dataloader, criterion, device, checkpoint_path=None):
     if checkpoint_path:
         model = load_checkpoint(checkpoint_path)
 
-    epoch_loss, epoch_score = evaluate(model, dataloader, criterion)
+    epoch_loss, epoch_score = evaluate(model, dataloader, criterion, device)
 
     print(f"\n\nTEST Score: {epoch_score}\n\n")
 
@@ -128,9 +132,10 @@ def run(args):
 
     device = get_device()
 
-    train_dl, valid_dl, test_dl = prepare_data(sampling_frac=args.data_sampling_frac)
+    train_dl, valid_dl, test_dl = prepare_data(
+        sampling_frac=args.data_sampling_frac, num_workers=args.dataloader_num_workers)
 
-    model = AclNet(architecture=args.architecture)
+    model = AclNet(architecture=args.architecture).to(device)
 
     optimizer = optim.SGD(model.parameters(), lr=args.learning_rate,
                           weight_decay=args.weight_decay)
@@ -141,10 +146,10 @@ def run(args):
 
     for epoch in range(num_epochs):
         _, _ = train(model, train_dl, optimizer,
-                     criterion, epoch, num_epochs, writer)
+                     criterion, epoch, num_epochs, writer, device)
 
         val_loss, val_score = evaluate_on_valid(
-            model, valid_dl, criterion, epoch, num_epochs, writer)
+            model, valid_dl, criterion, epoch, num_epochs, writer, device)
 
         if val_score > best_score:
             print(f"Improvement! Previous: {best_score}, new: {val_score}")
@@ -153,7 +158,7 @@ def run(args):
             save_checkpoint("checkpoint.pt", model, optimizer,
                             val_loss, val_score, epoch)
 
-    evaluate_on_test(model, test_dl, criterion,
+    evaluate_on_test(model, test_dl, criterion, device,
                      checkpoint_path="checkpoint.pt")
 
     writer.flush()
@@ -168,6 +173,7 @@ def parse_arguments():
     parser.add_argument('--architecture', type=str, default='resnet10',
                         choices=['resnet10', 'resnet34', 'resnet50'])
     parser.add_argument('--data_sampling_frac', type=float, default=1.0)
+    parser.add_argument('--dataloader_num_workers', type=int, default=10)
     args = parser.parse_args()
     print("Using params:", args)
     return args
