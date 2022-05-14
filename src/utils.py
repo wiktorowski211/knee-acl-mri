@@ -1,6 +1,7 @@
 import pickle
 
 import matplotlib.pyplot as plt
+import numpy as np
 import torch
 
 
@@ -29,6 +30,17 @@ def show_overlay(img1, img2, alpha=0.5):
     plt.imshow(img1_slice, cmap='gray')
     plt.imshow(img2_slice, cmap='hot', vmin=0.0, vmax=1.0, alpha=alpha)
     plt.show()
+
+
+def compare_histogram(img1, img2, bins=100):
+    plt.hist(img1.flatten(), bins=bins, alpha=0.5, label='x')
+    plt.hist(img2.flatten(), bins=bins, alpha=0.5, label='y')
+    plt.show()
+
+
+def compare_diff(img1, img2):
+    x = np.absolute(np.subtract(img1.astype(np.int16), img2.astype(np.int16)))
+    show_img(img1, x, img2)
 
 
 def save_checkpoint(checkpoint_path, model, optimizer, val_loss, val_score, epoch):

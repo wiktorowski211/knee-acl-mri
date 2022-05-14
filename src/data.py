@@ -1,12 +1,13 @@
 import numpy as np
 import pandas as pd
 import torch.utils.data as data
-from monai.transforms import (Compose, RandAffine, RandHistogramShift, Resize,
-                              ScaleIntensity, ToTensor)
+from monai.transforms import (Compose, Rand3DElastic, RandAffine,
+                              RandHistogramShift, Resize, ScaleIntensity,
+                              ToTensor)
 from sklearn.model_selection import train_test_split
 from torch.utils.data.sampler import WeightedRandomSampler
 
-from src.utils import load_img
+from src.utils import *
 
 
 class kneeMRIDataset(data.Dataset):
@@ -75,22 +76,23 @@ def split_data(df):
 
 
 def prepare_datasets(subsets):
-    transformations = Compose([
-                              Resize((3, 90, 90))],
-                              ScaleIntensity(),
-                              ToTensor()
-                              )
+    transformations = Compose(
+        Resize((9, 90, 90)),
+        ScaleIntensity(minv=-1.0, maxv=1.0),
+        ToTensor()
+    )
 
-    augmentations = Compose([
-                            RandHistogramShift(
-                                prob=0.5, num_control_points=(30, 100)),
-                            RandAffine(
-                                prob=0.5,
-                                translate_range=(1, 20, 20),
-                                rotate_range=(0.25, 0.25, 0.25),
-                                scale_range=(0.10, 0.10, 0.10),
-                                padding_mode='border')
-                            ])
+    augmentations = Compose(
+        RandHistogramShift(
+            prob=0.5, num_control_points=(1000, 1200)),
+        RandAffine(
+            prob=0.5,
+            translate_range=(0, 10, 10),
+            rotate_range=(0.10, 0.10, 0.10),
+            scale_range=(0.05, 0.05, 0.05),
+            padding_mode='border'),
+        Rand3DElastic(prob=0.5, sigma_range=(3, 7), magnitude_range=(10, 50))
+    )
 
     df_train, df_valid, df_test = subsets
 
