@@ -1,10 +1,11 @@
 import numpy as np
 import pandas as pd
 import torch.utils.data as data
-from monai.transforms import (Compose, Rand3DElastic, RandAffine,
-                              RandHistogramShift, Resize, ScaleIntensity,
-                              ToTensor)
+from monai.transforms import (CenterSpatialCrop, Compose, GaussianSmooth,
+                              Rand3DElastic, RandAffine, RandHistogramShift,
+                              Resize, ScaleIntensity, ToTensor)
 from sklearn.model_selection import train_test_split
+from sklearn.utils.class_weight import compute_class_weight
 from torch.utils.data.sampler import WeightedRandomSampler
 
 from src.utils import *
@@ -26,8 +27,13 @@ class kneeMRIDataset(data.Dataset):
 
         img = load_img(f"data/scans/{filename}").astype('float32')
 
-        roi = img[row.roiZ: row.roiZ+row.roiDepth, row.roiY: row.roiY +
-                  row.roiWidth, row.roiX: row.roiX+row.roiHeight]
+        z_m, y_m, x_m = img.shape
+
+        roi = img[
+            max(0, row.roiZ-2): min(z_m, row.roiZ+row.roiDepth+2),
+            max(0, row.roiY-5): min(y_m, row.roiY+row.roiWidth+5),
+            max(0, row.roiX-5): min(x_m, row.roiX+row.roiHeight+5),
+        ]
 
         roi = np.expand_dims(roi, axis=0)
 
@@ -49,13 +55,13 @@ def prepare_data(batch_size=64, sampling_frac=1.0, num_workers=None):
 
     dataloaders = prepare_dataloaders(datasets, batch_size, num_workers)
 
-    return dataloaders
+    class_weights = prepare_class_weights(df["aclDiagnosis"])
+
+    return dataloaders, class_weights
 
 
 def load_df(sampling_frac):
     df = pd.read_csv("data/metadata.csv")
-
-    df["aclDiagnosis"] = (df["aclDiagnosis"] > 0).astype('float32')
 
     if sampling_frac < 1.0:
         df = df.sample(frac=sampling_frac, random_state=1)
@@ -77,21 +83,27 @@ def split_data(df):
 
 def prepare_datasets(subsets):
     transformations = Compose(
-        Resize((9, 90, 90)),
-        ScaleIntensity(minv=-1.0, maxv=1.0),
-        ToTensor()
+        [
+            Resize((16, 96, 96)),
+            GaussianSmooth(sigma=0.2),
+            ScaleIntensity(minv=-1.0, maxv=1.0),
+            ToTensor()
+        ]
     )
 
     augmentations = Compose(
-        RandHistogramShift(
-            prob=0.5, num_control_points=(1000, 1200)),
-        RandAffine(
-            prob=0.5,
-            translate_range=(0, 10, 10),
-            rotate_range=(0.10, 0.10, 0.10),
-            scale_range=(0.05, 0.05, 0.05),
-            padding_mode='border'),
-        Rand3DElastic(prob=0.5, sigma_range=(3, 7), magnitude_range=(10, 50))
+        [
+            RandHistogramShift(
+                prob=0.1, num_control_points=(800, 1000)),
+            RandAffine(
+                prob=0.1,
+                translate_range=(3, 10, 10),
+                rotate_range=(0.1, 0.1, 0.1),
+                scale_range=(0.1, 0.1, 0.1),
+                padding_mode='border'),
+            Rand3DElastic(prob=0.1, sigma_range=(
+                3, 7), magnitude_range=(10, 50))
+        ]
     )
 
     df_train, df_valid, df_test = subsets
@@ -112,11 +124,11 @@ def prepare_dataloaders(datasets, batch_size, num_workers):
     train_sampler = prepare_weighted_sampler(train_dataset)
 
     train_dl = data.DataLoader(
-        train_dataset, batch_size=batch_size, pin_memory=True, drop_last=True, num_workers=num_workers, sampler=train_sampler)
+        train_dataset, batch_size=batch_size, shuffle=False, pin_memory=True, drop_last=True, num_workers=num_workers, sampler=train_sampler)
     valid_dl = data.DataLoader(
-        valid_dataset, batch_size=1024, shuffle=False, pin_memory=True, num_workers=num_workers)
+        valid_dataset, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers=num_workers)
     test_dl = data.DataLoader(
-        test_dataset, batch_size=1024, shuffle=False, pin_memory=True, num_workers=num_workers)
+        test_dataset, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers=num_workers)
     return train_dl, valid_dl, test_dl
 
 
@@ -130,3 +142,10 @@ def prepare_weighted_sampler(dataset):
     weights = labels_weights[y]
 
     return WeightedRandomSampler(weights, len(weights), replacement=True)
+
+
+def prepare_class_weights(y):
+    class_weights = compute_class_weight(
+        class_weight='balanced', classes=np.unique(y), y=y)
+    class_weights = torch.FloatTensor(class_weights)
+    return class_weights

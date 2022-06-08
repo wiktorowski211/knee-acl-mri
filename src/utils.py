@@ -22,6 +22,37 @@ def show_img(*imgs, cmap='gray'):
     plt.show()
 
 
+def save_img(*imgs, filename='img.png', cmap='gray'):
+    imgs = list(imgs)
+
+    fig = plt.figure(figsize=(4, 4))
+
+    for index, img in enumerate(imgs):
+        fig.add_subplot(1, len(imgs), index+1)
+        plt.imshow(img, cmap=cmap)
+
+    plt.savefig(filename)
+
+
+def show_planes(img, cmap='gray'):
+    fig = plt.figure(figsize=(10, 10))
+
+    fig.add_subplot(1, 3, 1)
+    plt.imshow(img[img.shape[0]//2, :, :], cmap=cmap)
+
+    fig.add_subplot(1, 3, 2)
+    plt.imshow(img[:, img.shape[1]//2, :], cmap=cmap)
+
+    fig.add_subplot(1, 3, 3)
+    plt.imshow(img[:, :, img.shape[2]//2], cmap=cmap)
+
+    plt.show()
+
+
+def describe_img(img):
+    print(img.min(), img.max(), img.mean(), img.shape)
+
+
 def show_overlay(img1, img2, alpha=0.5):
     img1_slice = img1[img1.shape[0]//2, :, :]
     img2_slice = img2[img2.shape[0]//2, :, :]
@@ -58,3 +89,11 @@ def load_checkpoint(checkpoint_path, model):
     checkpoint = torch.load(checkpoint_path)
     model.load_state_dict(checkpoint['model_state_dict'])
     return model
+
+
+def plot_gradients(model, epoch, writer):
+    for subnet_name, subnet in model.named_children():
+        for name, module in subnet.named_children():
+            parameters = module.parameters()
+            norm = torch.norm(torch.stack([torch.norm(p.grad.detach(), 2) for p in parameters]), 2)
+            writer.add_scalar(f'Gradients/{subnet_name}_{name}', norm, epoch)

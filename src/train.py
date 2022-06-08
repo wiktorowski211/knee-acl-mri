@@ -6,6 +6,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.optim.lr_scheduler as lr_scheduler
+from sklearn.metrics import confusion_matrix, f1_score
 from torch.utils.tensorboard import SummaryWriter
 
 from src.data import prepare_data
@@ -32,26 +33,33 @@ def seed_everything(seed=0):
 def train(model, dataloader, optimizer, criterion, epoch, num_epochs, writer, device):
     model.train()
 
-    scores = []
+    y_preds = np.array([])
+    y_actuals = np.array([])
+
     losses = []
 
     for i, (X, y) in enumerate(dataloader):
         X, y = X.to(device), y.to(device)
 
-        y = y.unsqueeze(1)
-
         optimizer.zero_grad()
 
-        y_pred = model(X)
+        y_pred, sample = model(X)
+
+        if i == 0:
+            save_img(sample.detach().cpu().numpy(), filename=f"x_prim_{epoch}.png")
 
         loss = criterion(y_pred, y)
         loss.backward()
 
         optimizer.step()
 
-        y_pred_probs = torch.sigmoid(y_pred)
+        y_pred_np = y_pred.argmax(dim=1).cpu().detach().numpy().flatten()
+        y_np = y.cpu().numpy().flatten()
 
-        score = roc_auc(y, y_pred_probs)
+        score = f1_score(y_np, y_pred_np, average='weighted')
+
+        y_preds = np.append(y_preds, y_pred_np)
+        y_actuals = np.append(y_actuals, y_np)
 
         step = epoch * len(dataloader) + i
 
@@ -61,11 +69,14 @@ def train(model, dataloader, optimizer, criterion, epoch, num_epochs, writer, de
         writer.add_scalar("Train/loss", loss.item(), step)
         writer.add_scalar("Train/score/roc_auc", score, step)
 
-        scores.append(score)
         losses.append(loss.item())
 
+    plot_gradients(model, epoch=epoch, writer=writer)
+
     epoch_loss = np.mean(losses)
-    epoch_score = np.mean(scores)
+    epoch_score = f1_score(y_actuals, y_preds, average='weighted')
+
+    print(confusion_matrix(y_actuals, y_preds))
 
     writer.add_scalar("Train/epoch_loss", epoch_loss, epoch)
     writer.add_scalar("Train/epoch_score/roc_auc", epoch_score, epoch)
@@ -77,27 +88,30 @@ def evaluate(model, dataloader, criterion, device):
     model.eval()
 
     losses = []
-    scores = []
+
+    y_preds = np.array([])
+    y_actuals = np.array([])
 
     with torch.no_grad():
         for i, (X, y) in enumerate(dataloader):
             X, y = X.to(device), y.to(device)
 
-            y = y.unsqueeze(1)
-
-            y_pred = model(X)
+            y_pred, _ = model(X)
 
             loss = criterion(y_pred, y)
 
-            y_pred_probs = torch.sigmoid(y_pred)
+            y_pred_np = y_pred.argmax(dim=1).cpu().detach().numpy().flatten()
+            y_np = y.cpu().numpy().flatten()
 
-            score = roc_auc(y, y_pred_probs)
+            y_preds = np.append(y_preds, y_pred_np)
+            y_actuals = np.append(y_actuals, y_np)
 
             losses.append(loss.item())
-            scores.append(score)
 
-    epoch_score = np.mean(scores)
     epoch_loss = np.mean(losses)
+    epoch_score = f1_score(y_actuals, y_preds, average='weighted')
+
+    print(confusion_matrix(y_actuals, y_preds))
 
     return epoch_loss, epoch_score
 
@@ -135,15 +149,14 @@ def run(args):
 
     device = get_device()
 
-    train_dl, valid_dl, test_dl = prepare_data(batch_size=args.batch_size,
-        sampling_frac=args.data_sampling_frac, num_workers=args.dataloader_num_workers)
+    (train_dl, valid_dl, test_dl), class_weights = prepare_data(batch_size=args.batch_size, sampling_frac=args.data_sampling_frac, num_workers=args.dataloader_num_workers)
 
     model = AclNet(architecture=args.architecture).to(device)
 
-    optimizer = optim.SGD(model.parameters(), lr=args.learning_rate,
-                          momentum=args.momentum, weight_decay=args.weight_decay)
+    optimizer = optim.Adam(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
 
-    criterion = nn.BCEWithLogitsLoss()
+    # criterion = nn.CrossEntropyLoss(weight=class_weights.to(device),reduction='mean')
+    criterion = nn.CrossEntropyLoss()
 
     scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, patience=args.lr_patience, factor=.5, verbose=True)
 
@@ -175,7 +188,7 @@ def parse_arguments():
     parser.add_argument('--epochs', type=int, default=50)
     parser.add_argument('--learning_rate', type=float, default=1e-2)
     parser.add_argument('--momentum', type=float, default=0.0)
-    parser.add_argument('--weight_decay', type=float, default=1e-5)
+    parser.add_argument('--weight_decay', type=float, default=0.0)
     parser.add_argument('--lr_patience', type=int, default=10)
     parser.add_argument('--batch_size', type=int, default=64)
     parser.add_argument('--architecture', type=str, default='resnet10',
